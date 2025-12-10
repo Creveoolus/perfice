@@ -1,0 +1,113 @@
+networks:
+  perfice:
+    driver: bridge
+
+services:
+  client:
+    image: ghcr.io/p0lloc/perfice:latest
+    build:
+      context: https://github.com/p0lloc/perfice.git#main:client
+      dockerfile: Dockerfile
+    container_name: client
+    ports:
+      - "80:80"
+    networks:
+      - perfice
+    restart: unless-stopped
+
+  auth:
+    image: auth:latest
+    container_name: auth
+    environment:
+      GRPC_PORT: ${AUTH_GRPC_PORT}
+      HTTP_PORT: ${AUTH_HTTP_PORT}
+      MONGO_URL: ${MONGO_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      KAFKA_URL: ${KAFKA_URL}
+      SENTRY_DSN: ${SENTRY_DSN}
+      BACKEND_BASE_URL: ${BACKEND_BASE_URL}
+      APP_BASE_URL: ${APP_BASE_URL}
+    networks:
+      - perfice
+    restart: unless-stopped
+
+  sync:
+    image: sync:latest
+    container_name: sync
+    environment:
+      PORT: ${SYNC_PORT}
+      MONGO_URL: ${MONGO_URL}
+      AUTH_GRPC_URL: ${AUTH_GRPC_URL}
+      KAFKA_URL: ${KAFKA_URL}
+      SENTRY_DSN: ${SENTRY_DSN}
+    networks:
+      - perfice
+    depends_on:
+      auth:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  gateway:
+    image: gateway:latest
+    container_name: gateway
+    ports:
+      - "${GATEWAY_PORT}:${GATEWAY_PORT}"
+    environment:
+      AUTH_GRPC_URL: ${AUTH_GRPC_URL}
+      AUTH_HTTP_URL: ${AUTH_HTTP_URL}
+      SYNC_URL: ${SYNC_URL}
+      INTEGRATION_URL: ${INTEGRATION_URL}
+      PORT: ${GATEWAY_PORT}
+      SENTRY_DSN: ${SENTRY_DSN}
+    networks:
+      - perfice
+    restart: unless-stopped
+
+  integration:
+    image: integration:latest
+    container_name: integration
+    environment:
+      MONGO_URL: ${MONGO_URL}
+      PORT: ${INTEGRATION_PORT}
+      CALLBACK_URL_BASE: ${CALLBACK_URL_BASE}
+      AUTH_GRPC_URL: ${AUTH_GRPC_URL}
+      KAFKA_URL: ${KAFKA_URL}
+      SENTRY_DSN: ${SENTRY_DSN}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+    networks:
+      - perfice
+    depends_on:
+      auth:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  kafka:
+    image: apache/kafka:latest
+    container_name: kafka
+    environment:
+      KAFKA_KRAFT_MODE: ${KAFKA_KRAFT_MODE}
+      KAFKA_PROCESS_ROLES: ${KAFKA_PROCESS_ROLES}
+      KAFKA_NODE_ID: ${KAFKA_NODE_ID}
+      KAFKA_CONTROLLER_LISTENER_NAMES: ${KAFKA_CONTROLLER_LISTENER_NAMES}
+      KAFKA_LISTENERS: ${KAFKA_LISTENERS}
+      KAFKA_ADVERTISED_LISTENERS: ${KAFKA_ADVERTISED_LISTENERS}
+      KAFKA_NUM_PARTITIONS: ${KAFKA_NUM_PARTITIONS}
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: ${KAFKA_AUTO_CREATE_TOPICS_ENABLE}
+      KAFKA_CONTROLLER_QUORUM_VOTERS: ${KAFKA_CONTROLLER_QUORUM_VOTERS}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: ${KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR}
+      KAFKA_LOG_RETENTION_MS: ${KAFKA_LOG_RETENTION_MS}
+      KAFKA_SEGMENT_MS: ${KAFKA_SEGMENT_MS}
+      KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: ${KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS}
+    networks:
+      - perfice
+    healthcheck:
+      test: [ "CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
