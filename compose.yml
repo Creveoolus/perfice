@@ -6,7 +6,7 @@ services:
   client:
     image: ghcr.io/p0lloc/perfice:latest
     build:
-      context: https://github.com/p0lloc/perfice.git#main:client
+      context: ./client
       dockerfile: Dockerfile
     container_name: client
     ports:
@@ -17,6 +17,9 @@ services:
 
   auth:
     image: auth:latest
+    build:
+      context: ./server
+      dockerfile: auth/Dockerfile
     container_name: auth
     environment:
       GRPC_PORT: ${AUTH_GRPC_PORT}
@@ -33,6 +36,9 @@ services:
 
   sync:
     image: sync:latest
+    build:
+      context: ./server
+      dockerfile: sync/Dockerfile
     container_name: sync
     environment:
       PORT: ${SYNC_PORT}
@@ -51,6 +57,9 @@ services:
 
   gateway:
     image: gateway:latest
+    build:
+      context: ./server
+      dockerfile: gateway/Dockerfile
     container_name: gateway
     ports:
       - "${GATEWAY_PORT}:${GATEWAY_PORT}"
@@ -67,6 +76,9 @@ services:
 
   integration:
     image: integration:latest
+    build:
+      context: ./server
+      dockerfile: integration/Dockerfile
     container_name: integration
     environment:
       MONGO_URL: ${MONGO_URL}
